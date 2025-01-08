@@ -1,12 +1,11 @@
-import csv
-from datetime import datetime
 import os
-import pandas as pd
-import plotly.express as px
+from datetime import datetime
+import matplotlib.pyplot as plt
+
 
 def lire_fichier_ics(nom_fichier):
     """
-    Lit le contenu du fichier .ics et extrait les données de tous les événements.
+    Lit le fichier ICS et extrait les événements.
     """
     with open(nom_fichier, 'r', encoding='utf-8') as fichier:
         lignes = fichier.readlines()
@@ -28,108 +27,85 @@ def lire_fichier_ics(nom_fichier):
                 evenement['Résumé'] = ligne.split(':', 1)[1].strip()
             elif ligne.startswith('DTSTART:'):
                 evenement['Début'] = formater_date(ligne.split(':', 1)[1].strip())
-            elif ligne.startswith('DTEND:'):
-                evenement['Fin'] = formater_date(ligne.split(':', 1)[1].strip())
-            elif ligne.startswith('LOCATION:'):
-                evenement['Lieu'] = ligne.split(':', 1)[1].strip()
             elif ligne.startswith('DESCRIPTION:'):
-                evenement['Description'] = nettoyer_description(ligne.split(':', 1)[1].strip())
-
-    # Ajouter une description par défaut si elle est manquante
-    for evt in evenements:
-        if 'Description' not in evt or not evt['Description']:
-            evt['Description'] = 'Aucune description disponible.'
+                evenement['Description'] = ligne.split(':', 1)[1].strip()
 
     return evenements
 
+
 def formater_date(date_ics):
     """
-    Convertit une date au format ICS (YYYYMMDDTHHMMSSZ) en format lisible (YYYY-MM-DD HH:MM).
+    Convertit une date ICS (YYYYMMDDTHHMMSSZ) en objet datetime.
     """
     try:
-        date_obj = datetime.strptime(date_ics, '%Y%m%dT%H%M%SZ')
-        return date_obj
+        return datetime.strptime(date_ics, '%Y%m%dT%H%M%SZ')
     except ValueError:
-        return date_ics  # Retourner la date brute si le format ne correspond pas
+        return None
 
-def nettoyer_description(description):
-    """
-    Nettoie la description en supprimant les sauts de ligne et les mentions de date d'exportation.
-    """
-    description = description.replace('\n', ' ').strip()
-    if 'Date d\'exportation' in description:
-        description = description.split('Date d\'exportation')[0].strip()
-    return description
-
-def filtrer_evenements(evenements):
-    """
-    Filtre les événements pour ne conserver que ceux de type "TP" et "A1" et appartenant aux mois de septembre,
-    octobre, novembre et décembre 2023.
-    """
-    evenements_filtrés = []
-    for evenement in evenements:
-        if 'TP' in evenement.get('Résumé', '') and 'A1' in evenement.get('Description', ''):
-            date_debut = evenement.get('Début')
-            if isinstance(date_debut, datetime):
-                if date_debut.year == 2023 and date_debut.month in [9, 10, 11, 12]:
-                    evenements_filtrés.append(evenement)
-    return evenements_filtrés
 
 def compter_seances_par_mois(evenements):
     """
-    Compte le nombre de séances de TP pour chaque mois (septembre, octobre, novembre, décembre 2023).
+    Compte le nombre de séances de TP du groupe A1 par mois.
     """
-    mois = {9: 0, 10: 0, 11: 0, 12: 0}
-    for evenement in evenements:
-        date_debut = evenement.get('Début')
-        if isinstance(date_debut, datetime):
-            mois[date_debut.month] += 1
-    return mois
+    mois_noms = ['Septembre', 'Octobre', 'Novembre', 'Décembre']
+    mois_indices = {9: 'Septembre', 10: 'Octobre', 11: 'Novembre', 12: 'Décembre'}
+    mois_counts = {mois: 0 for mois in mois_noms}
 
-def afficher_graphe(seances_par_mois):
+    for evt in evenements:
+        if 'TP' in evt.get('Résumé', '') and 'A1' in evt.get('Description', ''):
+            date = evt.get('Début')
+            if date and date.month in mois_indices:
+                mois = mois_indices[date.month]
+                mois_counts[mois] += 1
+
+    return mois_counts
+
+
+def creer_graphe(mois_counts, nom_fichier_png):
     """
-    Affiche un graphique des séances de TP par mois en utilisant Plotly.
+    Crée et exporte un graphique montrant les séances de TP par mois.
     """
-    mois = ['Septembre', 'Octobre', 'Novembre', 'Décembre']
-    seances = [seances_par_mois[9], seances_par_mois[10], seances_par_mois[11], seances_par_mois[12]]
+    mois = list(mois_counts.keys())
+    valeurs = list(mois_counts.values())
 
-    # Créer un DataFrame Pandas
-    df = pd.DataFrame({
-        'Mois': mois,
-        'Séances de TP': seances
-    })
+    plt.figure(figsize=(10, 6))
+    plt.bar(mois, valeurs, color='skyblue', edgecolor='black')
+    plt.title("Séances de TP du groupe A1 (2023)", fontsize=16)
+    plt.xlabel("Mois", fontsize=14)
+    plt.ylabel("Nombre de séances", fontsize=14)
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
 
-    # Créer un graphique avec Plotly
-    fig = px.bar(df, x='Mois', y='Séances de TP', title="Nombre de séances de TP du groupe A1 (Septembre - Décembre 2023)", labels={'Séances de TP': 'Nombre de séances'})
-    
-    # Sauvegarder le graphique en PNG
-    fig.write_image("seances_tp_A1.png")
-    fig.show()
+    # Exportation du graphique
+    plt.savefig(nom_fichier_png, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"Graphe exporté avec succès : {nom_fichier_png}")
+
 
 def main():
     """
-    Fonction principale pour exécuter le programme.
+    Fonction principale du programme.
     """
-    # Demander le nom du fichier ICS à lire
-    nom_fichier_ics = input("Entrez le nom du fichier ICS à analyser (sans extension) : ").strip()
-    if not nom_fichier_ics.endswith('.ics'):
-        nom_fichier_ics += '.ics'
-
+    # Demander le nom du fichier ICS
+    nom_fichier_ics = input("Entrez le nom du fichier ICS (avec extension) : ").strip()
     if not os.path.exists(nom_fichier_ics):
         print(f"Erreur : Le fichier '{nom_fichier_ics}' n'existe pas.")
         return
 
-    # Lire et extraire les données du fichier ICS
+    # Lire les événements du fichier ICS
     evenements = lire_fichier_ics(nom_fichier_ics)
 
-    # Filtrer les événements (TP pour le groupe A1 en 2023)
-    evenements_filtrés = filtrer_evenements(evenements)
-
     # Compter les séances par mois
-    seances_par_mois = compter_seances_par_mois(evenements_filtrés)
+    mois_counts = compter_seances_par_mois(evenements)
 
-    # Afficher le graphique
-    afficher_graphe(seances_par_mois)
+    # Afficher les résultats
+    print("\nNombre de séances par mois :")
+    for mois, count in mois_counts.items():
+        print(f"{mois} : {count} séances")
+
+    # Générer et exporter le graphique
+    nom_fichier_png = nom_fichier_ics.replace('.ics', '_graphe.png')
+    creer_graphe(mois_counts, nom_fichier_png)
+
 
 if __name__ == "__main__":
     main()

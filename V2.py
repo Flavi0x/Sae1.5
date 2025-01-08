@@ -62,6 +62,7 @@ def nettoyer_description(description):
 def convertir_en_csv(evenements, nom_fichier_csv):
     """
     Convertit les données extraites en pseudo-code CSV.
+    Remplit les cases vides avec "vide".
     """
     with open(nom_fichier_csv, 'w', newline='', encoding='utf-8') as fichier_csv:
         writer = csv.writer(fichier_csv)
@@ -70,11 +71,11 @@ def convertir_en_csv(evenements, nom_fichier_csv):
         # Écrire les données des événements
         for evenement in evenements:
             writer.writerow([
-                evenement.get('Résumé', ''),
-                evenement.get('Début', ''),
-                evenement.get('Fin', ''),
-                evenement.get('Lieu', ''),
-                evenement.get('Description', '')
+                evenement.get('Résumé', 'vide') or 'vide',
+                evenement.get('Début', 'vide') or 'vide',
+                evenement.get('Fin', 'vide') or 'vide',
+                evenement.get('Lieu', 'vide') or 'vide',
+                evenement.get('Description', 'vide') or 'vide'
             ])
 
 def main():
